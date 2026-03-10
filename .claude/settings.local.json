@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node:*)",
+      "Bash(pip3 list:*)",
+      "Bash(aws bedrock:*)",
+      "Bash(chmod +x:*)",
+      "Bash(python3:*)",
+      "Bash(npm install:*)",
+      "Bash(.venv/bin/python:*)",
+      "Bash(npx vite:*)",
+      "Bash(.venv/bin/pip install:*)",
+      "Bash(curl:*)",
+      "Bash(lsof:*)",
+      "Bash(xargs kill)"
+    ]
+  }
+}
