@@ -1,5 +1,5 @@
-import { DeleteOutlined, EditOutlined, SyncOutlined } from "@ant-design/icons";
-import { Button, Card, Form, Input, List, Modal, Select, Space, Tag, Typography, message } from "antd";
+import { BookOutlined, DeleteOutlined, EditOutlined, SyncOutlined } from "@ant-design/icons";
+import { Button, Card, Collapse, Form, Input, List, Modal, Select, Space, Tag, Typography, message } from "antd";
 import { useCallback, useEffect, useState } from "react";
 import { deletePolicy, listPolicies, regeneratePolicy } from "../api/policy";
 import PolicyEditor from "../components/PolicyEditor";
@@ -125,6 +125,60 @@ export default function PolicyPage() {
                         <Tag key={i}>{c.name}</Tag>
                       ))}
                     </div>
+                    {/* 数据来源摘要 */}
+                    {((p.rules as any)?.data_sources || []).length > 0 && (
+                      <Collapse
+                        size="small"
+                        style={{ marginTop: 8 }}
+                        items={[{
+                          key: "sources",
+                          label: (
+                            <Space size={4}>
+                              <BookOutlined />
+                              <span>数据来源 ({(p.rules as any).data_sources.length} 项)</span>
+                            </Space>
+                          ),
+                          children: (
+                            <List
+                              size="small"
+                              dataSource={(p.rules as any).data_sources}
+                              renderItem={(src: any) => (
+                                <List.Item>
+                                  <List.Item.Meta
+                                    title={
+                                      <Space size={4}>
+                                        <Tag color={
+                                          src.type === "法律" ? "red" :
+                                          src.type === "行业法规" ? "orange" :
+                                          src.type === "行政指南" ? "blue" :
+                                          src.type === "行业标准" ? "cyan" :
+                                          src.type === "文化习俗" ? "purple" : "default"
+                                        }>
+                                          {src.type}
+                                        </Tag>
+                                        <span>{src.name}</span>
+                                      </Space>
+                                    }
+                                    description={
+                                      <>
+                                        {src.description}
+                                        {src.related_categories?.length > 0 && (
+                                          <div style={{ marginTop: 4 }}>
+                                            {src.related_categories.map((c: string, j: number) => (
+                                              <Tag key={j} style={{ fontSize: 11 }}>{c}</Tag>
+                                            ))}
+                                          </div>
+                                        )}
+                                      </>
+                                    }
+                                  />
+                                </List.Item>
+                              )}
+                            />
+                          ),
+                        }]}
+                      />
+                    )}
                     <div style={{ marginTop: 4, fontSize: 12, color: "#999" }}>
                       更新时间: {p.updated_at}
                     </div>

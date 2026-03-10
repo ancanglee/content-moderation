@@ -34,12 +34,21 @@ export interface PolicyCategory {
   action: "PASS" | "REVIEW" | "FAIL";
 }
 
+// 策略数据来源
+export interface PolicyDataSource {
+  name: string;
+  type: string;  // 法律/行业法规/行政指南/行业标准/文化习俗
+  description: string;
+  related_categories: string[];
+}
+
 // 策略规则的完整结构
 export interface PolicyRules {
   policy_name: string;
   description: string;
   categories: PolicyCategory[];
   general_guidelines: string[];
+  data_sources?: PolicyDataSource[];
 }
 
 // --- 审核 ---

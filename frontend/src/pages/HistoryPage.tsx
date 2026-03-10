@@ -1,4 +1,4 @@
-import { Card, Col, Row, Select, Statistic, Table, Tag, Typography } from "antd";
+import { Alert, Card, Col, Row, Select, Statistic, Table, Tag, Typography } from "antd";
 import { useCallback, useEffect, useState } from "react";
 import { getStats, listRecords, type HistoryStats } from "../api/history";
 import type { ModerationRecord, ModerationResultData } from "../types";
@@ -9,22 +9,33 @@ export default function HistoryPage() {
   const [records, setRecords] = useState<ModerationRecord[]>([]);
   const [stats, setStats] = useState<HistoryStats | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [verdict, setVerdict] = useState<string | undefined>();
   const [fileType, setFileType] = useState<string | undefined>();
   const [page, setPage] = useState(1);
 
   const load = useCallback(async () => {
     setLoading(true);
-    try {
-      const [r, s] = await Promise.all([
-        listRecords({ page, verdict, file_type: fileType }),
-        getStats(),
-      ]);
-      setRecords(Array.isArray(r) ? r : []);
-      setStats(s);
-    } finally {
-      setLoading(false);
+    setError(null);
+
+    // 两个请求独立执行，互不影响
+    const [recordsResult, statsResult] = await Promise.allSettled([
+      listRecords({ page, verdict, file_type: fileType }),
+      getStats(),
+    ]);
+
+    if (recordsResult.status === "fulfilled") {
+      setRecords(Array.isArray(recordsResult.value) ? recordsResult.value : []);
+    } else {
+      setRecords([]);
+      setError(recordsResult.reason?.message || "加载审核记录失败");
     }
+
+    if (statsResult.status === "fulfilled") {
+      setStats(statsResult.value);
+    }
+
+    setLoading(false);
   }, [page, verdict, fileType]);
 
   useEffect(() => {
@@ -42,21 +53,33 @@ export default function HistoryPage() {
       render: (t: string) => <Tag>{t}</Tag>,
     },
     {
+      title: "状态",
+      dataIndex: "status",
+      key: "status",
+      width: 90,
+      render: (s: string) => (
+        <Tag color={s === "completed" ? "success" : s === "failed" ? "error" : "processing"}>
+          {s === "completed" ? "已完成" : s === "failed" ? "失败" : "处理中"}
+        </Tag>
+      ),
+    },
+    {
       title: "判定",
-
       key: "verdict",
       width: 100,
       render: (_: unknown, r: ModerationRecord) => {
         const v = (r.result as ModerationResultData)?.verdict;
-        return <Tag color={verdictColor[v] || "default"}>{v}</Tag>;
+        return v ? <Tag color={verdictColor[v] || "default"}>{v}</Tag> : "-";
       },
     },
     {
       title: "置信度",
       key: "confidence",
       width: 80,
-      render: (_: unknown, r: ModerationRecord) =>
-        `${(((r.result as ModerationResultData)?.confidence ?? 0) * 100).toFixed(0)}%`,
+      render: (_: unknown, r: ModerationRecord) => {
+        const c = (r.result as ModerationResultData)?.confidence;
+        return c != null ? `${(c * 100).toFixed(0)}%` : "-";
+      },
     },
     {
       title: "摘要",
@@ -78,6 +101,16 @@ export default function HistoryPage() {
   return (
     <div className="page-container">
       <Typography.Title level={3}>审核历史</Typography.Title>
+
+      {error && (
+        <Alert
+          type="error"
+          showIcon
+          message={error}
+          style={{ marginBottom: 16 }}
+          closable
+        />
+      )}
 
       {stats && (
         <Row gutter={16} style={{ marginBottom: 24 }}>
@@ -152,7 +185,9 @@ export default function HistoryPage() {
           pagination={{
             current: page,
             pageSize: 20,
+            total: stats?.total,
             onChange: setPage,
+            showTotal: (total) => `共 ${total} 条记录`,
           }}
         />
       </Card>

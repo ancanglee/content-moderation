@@ -1,6 +1,12 @@
+import os
 import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
+
+# 清除代理环境变量，确保 boto3 (AWS SDK) 直连 AWS 服务，
+# 不受本地代理开关状态影响
+for _proxy_var in ("http_proxy", "https_proxy", "HTTP_PROXY", "HTTPS_PROXY"):
+    os.environ.pop(_proxy_var, None)
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware

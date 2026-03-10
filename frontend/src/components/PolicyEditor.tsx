@@ -1,3 +1,4 @@
+import { BookOutlined } from "@ant-design/icons";
 import { Button, Card, Collapse, Descriptions, Form, Input, List, Modal, Select, Space, Spin, Tag, Typography } from "antd";
 import { useState } from "react";
 import { createPolicy, generatePolicy } from "../api/policy";
@@ -30,6 +31,7 @@ const contentTypeOptions = [
 export default function PolicyEditor({ onCreated }: Props) {
   const [loading, setLoading] = useState(false);
   const [preview, setPreview] = useState<Record<string, unknown> | null>(null);
+  const [customName, setCustomName] = useState("");
   const [form] = Form.useForm();
 
   const handleGenerate = async () => {
@@ -42,6 +44,7 @@ export default function PolicyEditor({ onCreated }: Props) {
         additional_requirements: values.additional_requirements || "",
       });
       setPreview(result);
+      setCustomName((result as any).policy_name || "");
     } catch {
       Modal.error({ title: "生成失败", content: "策略生成失败，请重试。" });
     } finally {
@@ -53,12 +56,13 @@ export default function PolicyEditor({ onCreated }: Props) {
     if (!preview) return;
     setLoading(true);
     try {
-      const name =
-        (preview as any).policy_name || `Policy ${new Date().toISOString().slice(0, 10)}`;
+      const name = customName.trim() || (preview as any).policy_name || `Policy ${new Date().toISOString().slice(0, 10)}`;
       const desc = (preview as any).description || "";
-      const policy = await createPolicy({ name, description: desc, rules: preview });
+      const rules = { ...preview, policy_name: name };
+      const policy = await createPolicy({ name, description: desc, rules });
       onCreated(policy);
       setPreview(null);
+      setCustomName("");
       form.resetFields();
     } catch {
       Modal.error({ title: "保存失败", content: "策略保存失败，请重试。" });
@@ -99,14 +103,22 @@ export default function PolicyEditor({ onCreated }: Props) {
           style={{ marginTop: 24 }}
           extra={
             <Space>
-              <Button onClick={() => setPreview(null)}>取消</Button>
+              <Button onClick={() => { setPreview(null); setCustomName(""); }}>取消</Button>
               <Button type="primary" onClick={handleSave} loading={loading}>
                 保存
               </Button>
             </Space>
           }
         >
-          <Typography.Title level={5}>{(preview as any).policy_name}</Typography.Title>
+          <div style={{ marginBottom: 12 }}>
+            <Typography.Text strong>策略名称:</Typography.Text>
+            <Input
+              value={customName}
+              onChange={(e) => setCustomName(e.target.value)}
+              placeholder="请输入策略名称"
+              style={{ marginTop: 4 }}
+            />
+          </div>
           <Typography.Paragraph type="secondary">
             {(preview as any).description}
           </Typography.Paragraph>
@@ -174,6 +186,49 @@ export default function PolicyEditor({ onCreated }: Props) {
                     <Typography.Text>{i + 1}. {g}</Typography.Text>
                   </List.Item>
                 )}
+              />
+            </div>
+          )}
+
+          {/* 数据来源 */}
+          {(preview as any).data_sources?.length > 0 && (
+            <div style={{ marginTop: 16 }}>
+              <Typography.Text strong style={{ display: "block", marginBottom: 8 }}>
+                <BookOutlined style={{ marginRight: 4 }} />
+                数据来源 ({(preview as any).data_sources.length} 项)
+              </Typography.Text>
+              <Collapse
+                size="small"
+                items={(preview as any).data_sources.map((src: any, i: number) => ({
+                  key: String(i),
+                  label: (
+                    <Space>
+                      <Tag color={
+                        src.type === "法律" ? "red" :
+                        src.type === "行业法规" ? "orange" :
+                        src.type === "行政指南" ? "blue" :
+                        src.type === "行业标准" ? "cyan" :
+                        src.type === "文化习俗" ? "purple" : "default"
+                      }>
+                        {src.type}
+                      </Tag>
+                      <span>{src.name}</span>
+                    </Space>
+                  ),
+                  children: (
+                    <>
+                      <Typography.Paragraph>{src.description}</Typography.Paragraph>
+                      {src.related_categories?.length > 0 && (
+                        <div>
+                          <Typography.Text type="secondary">关联类别: </Typography.Text>
+                          {src.related_categories.map((c: string, j: number) => (
+                            <Tag key={j}>{c}</Tag>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  ),
+                }))}
               />
             </div>
           )}

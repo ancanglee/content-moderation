@@ -3,6 +3,7 @@ import logging
 from typing import Any
 
 import boto3
+from botocore.config import Config
 
 from config import settings
 
@@ -11,7 +12,11 @@ logger = logging.getLogger(__name__)
 
 class BedrockClient:
     def __init__(self):
-        self._client = boto3.client("bedrock-runtime", region_name=settings.aws_region)
+        self._client = boto3.client(
+            "bedrock-runtime",
+            region_name=settings.aws_region,
+            config=Config(read_timeout=600, connect_timeout=10, retries={"max_attempts": 2}),
+        )
 
     def converse_text(
         self,

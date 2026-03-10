@@ -4,7 +4,7 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     # AWS 配置
     aws_region: str = "us-east-1"
-    s3_temp_bucket: str = "content-moderation-temp"
+    s3_temp_bucket: str = "focusmedia-20250424"
 
     # Bedrock 模型 (使用跨区域推理配置文件 ID)
     policy_model_id: str = "us.amazon.nova-pro-v1:0"

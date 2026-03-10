@@ -1,24 +1,37 @@
-import { Alert, Button, Card, Col, Row, Select, Spin, Typography, message } from "antd";
-import { useCallback, useEffect, useState } from "react";
-import { uploadAndModerate, type ModerationResponse } from "../api/moderation";
+import { Alert, Button, Card, Col, Row, Select, Steps, Typography, message } from "antd";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { pollModerationResult, uploadFile } from "../api/moderation";
 import { listPolicies } from "../api/policy";
 import FileUploader from "../components/FileUploader";
 import MediaPreview from "../components/MediaPreview";
 import ModerationResult from "../components/ModerationResult";
 import type { ModerationResultData, Policy } from "../types";
 
+type Phase = "idle" | "uploading" | "processing" | "completed" | "failed";
+
+const phaseStep: Record<Phase, number> = {
+  idle: 0,
+  uploading: 0,
+  processing: 1,
+  completed: 2,
+  failed: 2,
+};
+
 export default function ModerationPage() {
   const [file, setFile] = useState<File | null>(null);
   const [policyId, setPolicyId] = useState<number | null>(null);
   const [policies, setPolicies] = useState<Policy[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [phase, setPhase] = useState<Phase>("idle");
   const [result, setResult] = useState<ModerationResultData | null>(null);
   const [fileName, setFileName] = useState("");
+  const [errorMsg, setErrorMsg] = useState("");
+  const cancelRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     listPolicies()
       .then((data) => setPolicies(Array.isArray(data) ? data : []))
       .catch(() => {});
+    return () => { cancelRef.current?.(); };
   }, []);
 
   const handleModerate = useCallback(async () => {
@@ -26,19 +39,44 @@ export default function ModerationPage() {
       message.warning("请选择文件");
       return;
     }
-    setLoading(true);
+
+    cancelRef.current?.();
+    setPhase("uploading");
     setResult(null);
+    setErrorMsg("");
+
     try {
-      const resp = await uploadAndModerate(file, policyId);
-      setResult(resp.result);
+      // 1) 上传文件，立即返回
+      const resp = await uploadFile(file, policyId);
       setFileName(resp.file_name);
-      message.success("审核完成");
+      setPhase("processing");
+
+      // 2) 轮询获取结果
+      const { promise, cancel } = pollModerationResult(resp.record_id);
+      cancelRef.current = cancel;
+
+      const record = await promise;
+      cancelRef.current = null;
+
+      if (record.status === "completed" && record.result) {
+        setResult(record.result as ModerationResultData);
+        setPhase("completed");
+        message.success("审核完成");
+      } else {
+        const err = (record.result as any)?.error || "审核失败";
+        setErrorMsg(err);
+        setPhase("failed");
+        message.error("审核失败");
+      }
     } catch (err: any) {
+      if (err?.message === "已取消") return;
+      setErrorMsg(err?.response?.data?.detail || err?.message || "审核失败");
+      setPhase("failed");
       message.error(err?.response?.data?.detail || "审核失败");
-    } finally {
-      setLoading(false);
     }
   }, [file, policyId]);
+
+  const isProcessing = phase === "uploading" || phase === "processing";
 
   return (
     <div className="page-container">
@@ -47,7 +85,7 @@ export default function ModerationPage() {
       <Row gutter={24}>
         <Col xs={24} lg={12}>
           <Card title="文件上传" style={{ marginBottom: 16 }}>
-            <FileUploader onFileSelected={setFile} disabled={loading} />
+            <FileUploader onFileSelected={setFile} disabled={isProcessing} />
 
             <div style={{ marginTop: 16 }}>
               <Typography.Text strong>应用策略: </Typography.Text>
@@ -74,10 +112,10 @@ export default function ModerationPage() {
               size="large"
               style={{ marginTop: 16, width: "100%" }}
               onClick={handleModerate}
-              loading={loading}
+              loading={isProcessing}
               disabled={!file}
             >
-              开始审核
+              {isProcessing ? "审核中..." : "开始审核"}
             </Button>
           </Card>
 
@@ -85,13 +123,33 @@ export default function ModerationPage() {
         </Col>
 
         <Col xs={24} lg={12}>
-          {loading && (
-            <Card>
-              <div style={{ textAlign: "center", padding: 40 }}>
-                <Spin size="large" tip="正在审核内容..." />
-              </div>
+          {/* 进度指示 */}
+          {phase !== "idle" && (
+            <Card style={{ marginBottom: 16 }}>
+              <Steps
+                current={phaseStep[phase]}
+                status={phase === "failed" ? "error" : undefined}
+                items={[
+                  { title: "上传", description: phase === "uploading" ? "上传中..." : "已完成" },
+                  { title: "AI 审核", description: phase === "processing" ? "后台处理中..." : phase === "uploading" ? "等待中" : "已完成" },
+                  { title: "结果", description: phase === "completed" ? "审核完成" : phase === "failed" ? "审核失败" : "等待中" },
+                ]}
+              />
             </Card>
           )}
+
+          {/* 错误信息 */}
+          {phase === "failed" && errorMsg && (
+            <Alert
+              type="error"
+              showIcon
+              message="审核失败"
+              description={errorMsg}
+              style={{ marginBottom: 16 }}
+            />
+          )}
+
+          {/* 审核结果 */}
           <ModerationResult result={result} fileName={fileName} />
         </Col>
       </Row>

@@ -12,7 +12,7 @@ import {
 } from "antd";
 import { useEffect, useState } from "react";
 import { updatePolicy } from "../api/policy";
-import type { Policy, PolicyCategory, PolicyRules } from "../types";
+import type { Policy, PolicyCategory, PolicyDataSource, PolicyRules } from "../types";
 
 const { TextArea } = Input;
 
@@ -35,6 +35,7 @@ export default function PolicyRulesEditor({ policy, open, onClose, onSaved }: Pr
   const [form] = Form.useForm();
   const [categories, setCategories] = useState<PolicyCategory[]>([]);
   const [guidelines, setGuidelines] = useState<string[]>([]);
+  const [dataSources, setDataSources] = useState<PolicyDataSource[]>([]);
   const [saving, setSaving] = useState(false);
 
   // 打开时用策略数据填充表单
@@ -47,6 +48,7 @@ export default function PolicyRulesEditor({ policy, open, onClose, onSaved }: Pr
       });
       setCategories(rules.categories || []);
       setGuidelines(rules.general_guidelines || []);
+      setDataSources(rules.data_sources || []);
     }
   }, [policy, open, form]);
 
@@ -116,6 +118,19 @@ export default function PolicyRulesEditor({ policy, open, onClose, onSaved }: Pr
   const removeGuideline = (index: number) =>
     setGuidelines((prev) => prev.filter((_, i) => i !== index));
 
+  // 数据来源操作
+  const handleSourceChange = (index: number, field: keyof PolicyDataSource, value: unknown) => {
+    setDataSources((prev) => {
+      const next = [...prev];
+      next[index] = { ...next[index], [field]: value };
+      return next;
+    });
+  };
+  const addSource = () =>
+    setDataSources((prev) => [...prev, { name: "", type: "法律", description: "", related_categories: [] }]);
+  const removeSource = (index: number) =>
+    setDataSources((prev) => prev.filter((_, i) => i !== index));
+
   const handleSave = async () => {
     if (!policy) return;
     const values = await form.validateFields();
@@ -126,6 +141,7 @@ export default function PolicyRulesEditor({ policy, open, onClose, onSaved }: Pr
         description: values.description || "",
         categories: categories.filter((c) => c.name.trim()),
         general_guidelines: guidelines.filter((g) => g.trim()),
+        data_sources: dataSources.filter((s) => s.name.trim()),
       };
       await updatePolicy(policy.id, {
         name: values.name,
@@ -279,7 +295,7 @@ export default function PolicyRulesEditor({ policy, open, onClose, onSaved }: Pr
       </div>
 
       {/* 通用指南编辑 */}
-      <div>
+      <div style={{ marginBottom: 16 }}>
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
           <strong>通用指南</strong>
           <Button icon={<PlusOutlined />} size="small" onClick={addGuideline}>
@@ -301,6 +317,64 @@ export default function PolicyRulesEditor({ policy, open, onClose, onSaved }: Pr
             />
           </Space>
         ))}
+      </div>
+
+      {/* 数据来源编辑 */}
+      <div>
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+          <strong>数据来源</strong>
+          <Button icon={<PlusOutlined />} size="small" onClick={addSource}>
+            添加来源
+          </Button>
+        </div>
+        <Collapse
+          accordion
+          items={dataSources.map((src, si) => ({
+            key: String(si),
+            label: src.name || `来源 ${si + 1}`,
+            extra: (
+              <DeleteOutlined
+                style={{ color: "#ff4d4f" }}
+                onClick={(e) => { e.stopPropagation(); removeSource(si); }}
+              />
+            ),
+            children: (
+              <Space direction="vertical" style={{ width: "100%" }}>
+                <Input
+                  addonBefore="名称"
+                  value={src.name}
+                  onChange={(e) => handleSourceChange(si, "name", e.target.value)}
+                />
+                <Select
+                  style={{ width: 250 }}
+                  value={src.type}
+                  onChange={(v) => handleSourceChange(si, "type", v)}
+                  options={[
+                    { value: "法律", label: "法律" },
+                    { value: "行业法规", label: "行业法规" },
+                    { value: "行政指南", label: "行政指南" },
+                    { value: "行业标准", label: "行业标准" },
+                    { value: "文化习俗", label: "文化习俗" },
+                  ]}
+                />
+                <TextArea
+                  placeholder="与策略的关联说明"
+                  rows={2}
+                  value={src.description}
+                  onChange={(e) => handleSourceChange(si, "description", e.target.value)}
+                />
+                <Select
+                  mode="multiple"
+                  style={{ width: "100%" }}
+                  placeholder="关联的审核类别"
+                  value={src.related_categories}
+                  onChange={(v) => handleSourceChange(si, "related_categories", v)}
+                  options={categories.filter((c) => c.name.trim()).map((c) => ({ value: c.name, label: c.name }))}
+                />
+              </Space>
+            ),
+          }))}
+        />
       </div>
     </Modal>
   );
